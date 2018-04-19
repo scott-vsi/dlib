@@ -14,7 +14,7 @@ using namespace dlib;
 // ----------------------------------------------------------------------------------------
 
 // Only these computational layers have parameters
-const std::set<string> comp_tags_with_params = {"fc", "fc_no_bias", "con", "affine_con", "affine_fc", "affine", "prelu"};
+const std::set<string> comp_tags_with_params = {"fc", "fc_no_bias", "con", "affine_con", "affine_fc", "affine", "bn_con", "bn_fc", "bn", "prelu"};
 
 struct layer
 {
@@ -379,9 +379,11 @@ void convert_dlib_xml_to_caffe_python_code(
         }
         else if (i->detail_name == "bn_con" || i->detail_name == "bn_fc")
         {
-            throw dlib::error("Conversion from dlib's batch norm layers to caffe's isn't supported.  Instead, "
-                "you should put your dlib network into 'test mode' by switching batch norm layers to affine layers. "
-                "Then you can convert that 'test mode' network to caffe.");
+            //throw dlib::error("Conversion from dlib's batch norm layers to caffe's isn't supported.  Instead, "
+            //    "you should put your dlib network into 'test mode' by switching batch norm layers to affine layers. "
+            //    "Then you can convert that 'test mode' network to caffe.");
+            fout << "    n." << i->caffe_layer_name() << " = L.BatchNorm(n." << find_input_layer_caffe_name(i);
+            fout << ");\n";
         }
         else if (i->detail_name == "affine_con")
         {
@@ -520,7 +522,7 @@ void convert_dlib_xml_to_caffe_python_code(
             fout << "    p.shape = net.params['"<<i->caffe_layer_name()<<"'][0].data.shape;\n";
             fout << "    net.params['"<<i->caffe_layer_name()<<"'][0].data[:] = p;\n";
         }
-        else if (i->detail_name == "affine_con" || i->detail_name == "affine_fc")
+        else if (i->detail_name == "affine_con" || i->detail_name == "affine_fc" || i->detail_name == "bn_con" || i->detail_name == "bn_fc")
         {
             const long dims = i->params.size()/2;
             matrix<float> gamma = trans(rowm(i->params,range(0,dims-1)));
