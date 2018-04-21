@@ -1311,6 +1311,8 @@ namespace dlib
             out << " bias_weight_decay_mult='"<<item.bias_weight_decay_multiplier<<"'";
             out << ">\n";
 
+            out << trans(mat(item.running_means));
+            out << trans(mat(item.running_variances));
             out << mat(item.params);
 
             if (mode==CONV_MODE)

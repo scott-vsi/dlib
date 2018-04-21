@@ -382,7 +382,12 @@ void convert_dlib_xml_to_caffe_python_code(
             //throw dlib::error("Conversion from dlib's batch norm layers to caffe's isn't supported.  Instead, "
             //    "you should put your dlib network into 'test mode' by switching batch norm layers to affine layers. "
             //    "Then you can convert that 'test mode' network to caffe.");
-            fout << "    n." << i->caffe_layer_name() << " = L.BatchNorm(n." << find_input_layer_caffe_name(i);
+            // HACK this is strictly for forwarding through caffegraph; because caffe does not support the learned
+            // stride and scale factor from the original batch normalization paper, save two batch norm layers, one
+            // with the stride and bias (beta and gamma) and the other with the running mean and variance
+            fout << "    n.faux_" << i->caffe_layer_name() << " = L.BatchNorm(n." << find_input_layer_caffe_name(i);
+            fout << ");\n";
+            fout << "    n." << i->caffe_layer_name() << " = L.BatchNorm(n.faux_" << i->caffe_layer_name();
             fout << ");\n";
         }
         else if (i->detail_name == "affine_con")
@@ -522,7 +527,43 @@ void convert_dlib_xml_to_caffe_python_code(
             fout << "    p.shape = net.params['"<<i->caffe_layer_name()<<"'][0].data.shape;\n";
             fout << "    net.params['"<<i->caffe_layer_name()<<"'][0].data[:] = p;\n";
         }
-        else if (i->detail_name == "affine_con" || i->detail_name == "affine_fc" || i->detail_name == "bn_con" || i->detail_name == "bn_fc")
+        else if (i->detail_name == "bn_con" || i->detail_name == "bn_fc")
+        {
+            // HACK this is strictly for forwarding through caffegraph; because caffe does not support the learned
+            // stride and scale factor from the original batch normalization paper, save two batch norm layers, one
+            // with the stride and bias (beta and gamma) and the other with the running mean and variance
+            const long dims = i->params.size()/4;
+            // loaded in dnn/layers.h:bn_:to_xml() order
+            matrix<float> running_means = trans(rowm(i->params,range(2*dims, 3*dims-1)));
+            matrix<float> running_variances = trans(rowm(i->params,range(3*dims, 4*dims-1)));
+            matrix<float> gamma = trans(rowm(i->params,range(0,dims-1)));
+            matrix<float> beta  = trans(rowm(i->params,range(dims, 2*dims-1)));
+            fweights.write((char*)&running_means(0,0), running_means.size()*sizeof(float));
+            fweights.write((char*)&running_variances(0,0), running_variances.size()*sizeof(float));
+            fweights.write((char*)&gamma(0,0), gamma.size()*sizeof(float));
+            fweights.write((char*)&beta(0,0), beta.size()*sizeof(float));
+
+            // set running_means
+            fout << "    p = np.fromfile(f, dtype='float32', count="<<running_means.size()<<");\n";
+            fout << "    p.shape = net.params['"<<i->caffe_layer_name()<<"'][0].data.shape;\n";
+            fout << "    net.params['"<<i->caffe_layer_name()<<"'][0].data[:] = p;\n";
+
+            // set running_variances
+            fout << "    p = np.fromfile(f, dtype='float32', count="<<running_variances.size()<<");\n";
+            fout << "    p.shape = net.params['"<<i->caffe_layer_name()<<"'][1].data.shape;\n";
+            fout << "    net.params['"<<i->caffe_layer_name()<<"'][1].data[:] = p;\n";
+
+            // set gamma weights
+            fout << "    p = np.fromfile(f, dtype='float32', count="<<gamma.size()<<");\n";
+            fout << "    p.shape = net.params['faux_"<<i->caffe_layer_name()<<"'][0].data.shape;\n";
+            fout << "    net.params['faux_"<<i->caffe_layer_name()<<"'][0].data[:] = p;\n";
+
+            // set beta weights
+            fout << "    p = np.fromfile(f, dtype='float32', count="<<beta.size()<<");\n";
+            fout << "    p.shape = net.params['faux_"<<i->caffe_layer_name()<<"'][1].data.shape;\n";
+            fout << "    net.params['faux_"<<i->caffe_layer_name()<<"'][1].data[:] = p;\n";
+        }
+        else if (i->detail_name == "affine_con" || i->detail_name == "affine_fc")
         {
             const long dims = i->params.size()/2;
             matrix<float> gamma = trans(rowm(i->params,range(0,dims-1)));
