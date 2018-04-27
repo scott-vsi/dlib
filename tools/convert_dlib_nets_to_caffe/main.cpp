@@ -414,6 +414,7 @@ void convert_dlib_xml_to_caffe_python_code(
                     in_shape1(2) == in_shape2(2) && 
                     in_shape1(3) == in_shape2(3))
                 {
+                    // these arguments are deprecated; use the shape parameter
                     fout << "    n." << i->caffe_layer_name() << "_zeropad = L.DummyData(num=" << in_shape1(0);
                     fout << ", channels="<<std::abs(in_shape1(1)-in_shape2(1));
                     fout << ", height="<<in_shape1(2);
@@ -807,6 +808,15 @@ void compute_output_tensor_shapes(const matrix<long,4,1>& input_tensor_shape, st
         {
             i->output_tensor_shape = input_shape;
         }
+
+        //{
+        //    // print the shape of each layer
+        //    std::ostringstream os;
+        //    os << i->output_tensor_shape;
+        //    std::string o = os.str();
+        //    std::replace(o.begin(), o.end(), '\n', ' ');
+        //    std::cout << i->detail_name << " (" << o << ")" << std::endl;
+        //}
 
     }
 }
